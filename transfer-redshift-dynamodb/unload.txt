@@ -1,0 +1,6 @@
+unload ('select * from "table-name" ')
+to "s3-bucket-URI"
+iam_role "arn-of-role-attached-to-redhsift-namespace"
+parallel off
+HEADER
+CSV;
