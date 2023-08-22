@@ -1,0 +1,720 @@
+# The OrderPizza bot consists of the following:
+# 1. IAM Role used by the Lex service to make runtime calls
+# 2. IAM Role used by Lambda service
+# 3. Lambda function for integration with Lex V2 bot
+# 4. Inline bot definition that depends on the IAM role
+# 5. Resource Based policy for Lambda function
+Resources:
+  # 1. IAM Role used by the Lex service to make runtime calls
+  BotRuntimeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lexv2.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: LexRuntimeRolePolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "polly:SynthesizeSpeech"
+                  - "comprehend:DetectSentiment"
+                Resource: "*"
+
+  # 2. IAM Role used by Lambda service 
+  LambdaRuntimeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: LambdaRuntimeRolePolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/OrderMyPizzaFunc:*"
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+
+  # 3. Lambda function for integration with Lex V2 bot
+  OrderPizzaLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.9
+      Role: !GetAtt LambdaRuntimeRole.Arn
+      Handler: index.lambda_handler
+      FunctionName: "OrderMyPizzaFunc"
+      Code:
+        ZipFile: |
+          # 2. set the type of pizza you want :- veg or non-veg
+          def setType(event, slots, intent_name, slot_name):
+              return {
+                  "sessionState": {
+                      "dialogAction": {
+                          "type": "ElicitSlot",
+                          "slotToElicit": slot_name
+                      },
+                      "intent": {
+                          "name": intent_name,
+                          "slots": slots
+                      }
+                  },
+                  "messages": [
+                      {
+                          "contentType": "ImageResponseCard",
+                          "imageResponseCard": {
+                              "title": "What would you like to have?",
+                              "buttons": [
+                                  {
+                                      "text": "Veg Pizza",
+                                      "value": "vegetarian"
+                                  },
+                                  {
+                                      "text": "Non-veg Pizza",
+                                      "value": "non-vegetarian"
+                                  }
+                              ]
+                          }
+                      }
+                  ]
+              }
+
+          # 3. set the crust of Pizza
+          def setCrust(event, slots, intent_name, slot_name):
+              return {
+                  "sessionState": {
+                      "dialogAction": {
+                          "type": "ElicitSlot",
+                          "slotToElicit": slot_name
+                      },
+                      "intent": {
+                          "name": intent_name,
+                          "slots": slots
+                      }
+                  },
+                  "messages": [
+                      {
+                          "contentType": "ImageResponseCard",
+                          "imageResponseCard": {
+                              "title": "Please choose a crust",
+                              "buttons": [
+                                  {
+                                      "text": "Thin",
+                                      "value": "thin"
+                                  },
+                                  {
+                                      "text": "Hand Tossed",
+                                      "value": "hand tossed"
+                                  },
+                                  {
+                                      "text": "Cheese Burst",
+                                      "value": "cheese burst"
+                                  },
+                                  {
+                                      "text": "Wheat Thin Crust",
+                                      "value": "wheat thin crust"
+                                  },
+                                  {
+                                      "text": "Fresh Pan",
+                                      "value": "fresh pan"
+                                  }
+                              ]
+                          }
+                      }
+                  ]
+              }
+
+          # 4. set the type of vegetarian pizza
+          def setVegType(event, slots, intent_name, slot_name):
+              return {
+                  "sessionState": {
+                      "dialogAction": {
+                          "type": "ElicitSlot",
+                          "slotToElicit": slot_name
+                      },
+                      "intent": {
+                          "name": intent_name,
+                          "slots": slots
+                      }
+                  },
+                  "messages": [
+                      {
+                          "contentType": "ImageResponseCard",
+                          "imageResponseCard": {
+                              "title": "These are your choices:",
+                              "buttons": [
+                                  {
+                                      "text": "Farm-House",
+                                      "value": "farm house"
+                                  },
+                                  {
+                                      "text": "Veg Overloaded",
+                                      "value": "veg overloaded"
+                                  },
+                                  {
+                                      "text": "Double Cheese Margherita",
+                                      "value": "double cheese margherita"
+                                  },
+                                  {
+                                      "text": "Veg Extravaganza",
+                                      "value": "veg extravaganza"
+                                  },
+                                  {
+                                      "text": "Mexican Green Wave",
+                                      "value": "mexican green wave"
+                                  }
+                              ]
+                          }
+                      }
+                  ]
+              }
+
+          # 5. set the type of non-vegetarian pizza
+          def setNonVegType(event, slots, intent_name, slot_name):
+              return {
+                  "sessionState": {
+                      "dialogAction": {
+                          "type": "ElicitSlot",
+                          "slotToElicit": slot_name
+                      },
+                      "intent": {
+                          "name": intent_name,
+                          "slots": slots
+                      }
+                  },
+                  "messages": [
+                      {
+                          "contentType": "ImageResponseCard",
+                          "imageResponseCard": {
+                              "title": "Please choose your flavour",
+                              "buttons": [
+                                  {
+                                      "text": "Chicken dominator",
+                                      "value": "chicken dominator"
+                                  },
+                                  {
+                                      "text": "Chicken Sausage",
+                                      "value": "chicken sausage"
+                                  },
+                                  {
+                                      "text": "Chicken Pepperoni",
+                                      "value": "chicken pepperoni"
+                                  },
+                                  {
+                                      "text": "Non-Veg Supreme",
+                                      "value": "non veg supreme"
+                                  },
+                                  {
+                                      "text": "Pepper Barbecue Chicken",
+                                      "value": "pepper barbecue chicken"
+                                  }
+                              ]
+                          }
+                      }
+                  ]
+              }
+    
+          # 6. a confirmation function for the intent "DesignYourPizza"
+          def isExtraRequired(event, slots, intent_name):
+              return {
+                  "sessionState":{
+                      "dialogAction": {
+                          "type": "ConfirmIntent"
+                      },
+                      "intent":{
+                          "name": intent_name,
+                          "slots": slots
+                      }
+                  },
+                  "messages": [
+                      {
+                          "contentType": "ImageResponseCard",
+                          "imageResponseCard": {
+                              "title": "Do you want to order from our extras?",
+                              "buttons": [
+                                  {
+                                      "text": "Yes",
+                                      "value": "yes"
+                                  },
+                                  {
+                                      "text": "No",
+                                      "value": "no"
+                                  }
+                              ]
+                          }
+                      }
+                  ]
+              }
+   
+          # 7. fulfillment function for the intent "DesignYourPizza" 
+          def createMyPizza(event, slots, intent_name):
+              return {
+                  "sessionState":{
+                      "dialogAction": {
+                          "type": "Close"
+                      },
+                      "intent":{
+                          "name": intent_name,
+                          "slots": slots,
+                          "state": "Fulfilled"
+                      }
+                  },
+                  "messages": [
+                      {
+                          "contentType": "PlainText",
+                          "content": f'''Thanks for ordering. We will deliver to you soon. Bon Appetite!!!!'''
+                      }
+                  ]
+              }
+    
+          # 8. set the type of bread and intents getting switched
+          def setBread(event, intent_name, slot_name):
+              return {
+                  "sessionState": {
+                      "dialogAction": {
+                          "type": "ElicitSlot",
+                          "slotToElicit": slot_name
+                      },
+                      "intent": {
+                          "name": intent_name,
+                          "slots": {
+                              "bread": None,
+                              "pasta": None,
+                              "dessert": None
+                          }
+                      }
+                  },
+                  "messages": [
+                      {
+                          "contentType": "ImageResponseCard",
+                          "imageResponseCard": {
+                              "title": "Please choose a bread",
+                              "buttons": [
+                                  {
+                                      "text": "Garlic Bread",
+                                      "value": "garlic bread"
+                                  },
+                                  {
+                                      "text": "Stuffed Garlic Bread",
+                                      "value": "stuffed garlic bread"
+                                  },
+                                  {
+                                      "text": "Cheese Garlic Bread",
+                                      "value": "cheese garlic bread"
+                                  }
+                              ]
+                          }
+                      }
+                  ]
+              }
+    
+          # 9. set the type of pasta
+          def setPasta(event, slots, intent_name, slot_name):
+              return {
+                  "sessionState": {
+                      "dialogAction": {
+                          "type": "ElicitSlot",
+                          "slotToElicit": slot_name
+                      },
+                      "intent": {
+                          "name": intent_name,
+                          "slots": slots
+                      }
+                  },
+                  "messages": [
+                      {
+                          "contentType": "ImageResponseCard",
+                          "imageResponseCard": {
+                              "title": "Please choose a pasta:",
+                              "buttons": [
+                                  {
+                                      "text": "Moroccan Spice Pasta Veg",
+                                      "value": "moroccan spice pasta veg"
+                                  },
+                                  {
+                                      "text": "Creamy Tomato Pasta Veg",
+                                      "value": "creamy tomato pasta veg"
+                                  },
+                                  {
+                                      "text": "White Sauce Pasta Veg",
+                                      "value": "white sauce pasta veg"
+                                  },
+                                  {
+                                      "text": "Cheese Pasta Veg",
+                                      "value": "cheese pasta veg"
+                                  }
+                              ]
+                          }
+                      }
+                  ]
+              }
+ 
+          # 10. set the type of dessert  
+          def setDessert(event, slots, intent_name, slot_name):
+              return {
+                  "sessionState": {
+                      "dialogAction": {
+                          "type": "ElicitSlot",
+                          "slotToElicit": slot_name
+                      },
+                      "intent": {
+                          "name": intent_name,
+                          "slots": slots
+                      }
+                  },
+                  "messages": [
+                      {
+                          "contentType": "ImageResponseCard",
+                          "imageResponseCard": {
+                              "title": "Please choose a dessert:",
+                              "buttons": [
+                                  {
+                                      "text": "Choco Lava Cake",
+                                      "value": "choco lava cake"
+                                  },
+                                  {
+                                      "text": "Butterscotch Mousse Cake",
+                                      "value": "butterscotch mousse cake"
+                                  },
+                                  {
+                                      "text": "Red Velvet Lava Cake",
+                                      "value": "red velvet lava cake"
+                                  }
+                              ]
+                          }
+                      }
+                  ]
+              }
+    
+
+          # 1. main function where all the conditions are applied and all the functions are invoked.
+          def setPizza(event):
+              intent_name = event['sessionState']['intent']['name']
+              slots = event['sessionState']['intent']['slots']
+              
+              if intent_name == 'DesignYourPizza':
+                  confirmation = event['sessionState']['intent']['confirmationState']
+                  
+                  # elicitation zone
+                  if slots['type'] == None:
+                      return setType(event, slots, intent_name, 'type')
+                    
+                  if slots['crust'] == None:
+                      return setCrust(event, slots, intent_name, 'crust')
+                      
+                  if slots['type']['value']['interpretedValue'] == 'vegetarian' and slots['vegType'] == None:
+                      return setVegType(event, slots, intent_name, 'vegType')
+                  
+                  elif slots['type']['value']['interpretedValue'] == 'non-vegetarian' and slots['nonVegType'] == None:
+                      return setNonVegType(event, slots, intent_name, 'nonVegType') 
+
+                  
+                  # confirmation zone
+                  if confirmation == 'None': 
+                      return isExtraRequired(event, slots, intent_name)
+                  
+                  elif confirmation == 'Confirmed':
+                      return setBread(event, 'OrderExtras', 'bread')
+
+                    
+              if intent_name == 'OrderExtras':
+                  # elicitation zone
+                  if slots['pasta'] == None:
+                      return setPasta(event, slots, intent_name, 'pasta')
+                      
+                  if slots['dessert'] == None:
+                      return setDessert(event, slots, intent_name, 'dessert')
+                      
+              return createMyPizza(event, slots, intent_name)
+            
+                  
+          def lambda_handler(event, context):
+              return setPizza(event)
+
+      Description: This Lambda function is a code-hook for Lex V2 bot OrderPizzaWithCFN.
+
+  # 4. Inline bot definition that depends on the IAM role.
+  # The bot definition consists of combining all the child resources into one CFN resource.
+  # This includes Locales, Intents, Slots, and SlotTypes.
+  OrderPizzaTemplateBot:
+    DependsOn: BotRuntimeRole
+    Type: AWS::Lex::Bot
+    Properties:
+      Name: "OrderPizzaWithCFN"
+      Description: "This bot orders pizza of your choice."
+      RoleArn: !GetAtt BotRuntimeRole.Arn
+      DataPrivacy:
+        ChildDirected: false
+      IdleSessionTTLInSeconds: 300
+      # We provide a setting that allows you to auto build the locales provided.
+      # Locale builds are also kicked off if you attempt to create a bot version 
+      # that depends on an unbuilt locale.
+      AutoBuildBotLocales: false
+      BotLocales:
+        - LocaleId: "en_US"
+          NluConfidenceThreshold: 0.40
+          VoiceSettings:
+            VoiceId: "Joanna"
+          SlotTypes:
+            - Name: "BreadType"
+              Description: "Type of bread to be ordered"
+              SlotTypeValues:
+                - SampleValue:
+                    Value: "garlic bread"
+                - SampleValue:
+                    Value: "stuffed garlic bread"
+                - SampleValue:
+                    Value: "cheese garlic bread"
+              ValueSelectionSetting:
+                ResolutionStrategy: ORIGINAL_VALUE
+            - Name: "PizzaType"
+              Description: "Type of pizza to be ordered"
+              SlotTypeValues:
+                - SampleValue:
+                    Value: "vegetarian"
+                - SampleValue:
+                    Value: "non-vegetarian"
+              ValueSelectionSetting:
+                ResolutionStrategy: ORIGINAL_VALUE
+            - Name: "CrustType"
+              Description: "Type of crust to be ordered"
+              SlotTypeValues:
+                - SampleValue:
+                    Value: "thin"
+                - SampleValue:
+                    Value: "hand tossed"
+                - SampleValue:
+                    Value: "cheese burst"
+                - SampleValue:
+                    Value: "wheat thin crust"
+                - SampleValue:
+                    Value: "fresh pan"
+              ValueSelectionSetting:
+                ResolutionStrategy: ORIGINAL_VALUE
+            - Name: "NonVegPizzaType"
+              Description: "Type of non-veg pizza to be ordered"
+              SlotTypeValues:
+                - SampleValue:
+                    Value: "chicken dominator"
+                - SampleValue:
+                    Value: "chicken sausage"
+                - SampleValue:
+                    Value: "chicken pepperoni"
+                - SampleValue:
+                    Value: "non veg supreme"
+                - SampleValue:
+                    Value: "pepper barbecue chicken"
+              ValueSelectionSetting:
+                ResolutionStrategy: ORIGINAL_VALUE
+            - Name: "VegPizzaType"
+              Description: "Type of veg pizza to be ordered"
+              SlotTypeValues:
+                - SampleValue:
+                    Value: "farm house"
+                - SampleValue:
+                    Value: "veg overloaded"
+                - SampleValue:
+                    Value: "double cheese margherita"
+                - SampleValue:
+                    Value: "veg extravaganza"
+                - SampleValue:
+                    Value: "mexican green wave"
+              ValueSelectionSetting:
+                ResolutionStrategy: ORIGINAL_VALUE
+            - Name: "PastaType"
+              Description: "Type of pasta to be ordered"
+              SlotTypeValues:
+                - SampleValue:
+                    Value: "moroccan spice pasta veg"
+                - SampleValue:
+                    Value: "creamy tomato pasta veg"
+                - SampleValue:
+                    Value: "white sauce pasta veg"
+                - SampleValue:
+                    Value: "cheese pasta veg"
+              ValueSelectionSetting:
+                ResolutionStrategy: ORIGINAL_VALUE
+            - Name: "DessertType"
+              Description: "Type of dessert to be ordered"
+              SlotTypeValues:
+                - SampleValue:
+                    Value: "choco lava cake"
+                - SampleValue:
+                    Value: "butterscotch mousse cake"
+                - SampleValue:
+                    Value: "red velvet lava cake"
+              ValueSelectionSetting:
+                ResolutionStrategy: ORIGINAL_VALUE
+          Intents:
+            - Name: "DesignYourPizza"
+              Description: "This intent allows you to desgin your pizza the way you want."
+              DialogCodeHook:
+                Enabled: true
+              SampleUtterances:
+                - Utterance: "order pizza"
+                - Utterance: "I would like to order a pizza"
+                - Utterance: "order my pizza"
+              IntentConfirmationSetting:
+                PromptSpecification:
+                  MessageGroupsList:
+                    - Message:
+                        PlainTextMessage:
+                          Value: "Do you want to order from our extras?"
+                  MaxRetries: 3
+                  AllowInterrupt: false
+                DeclinationResponse:
+                  MessageGroupsList:
+                    - Message:
+                        PlainTextMessage:
+                          Value: "Thanks for ordering. We will deliver to you soon. Bon Appetite!!!!"
+                  AllowInterrupt: false
+              SlotPriorities:
+                - Priority: 1
+                  SlotName: type
+                - Priority: 2
+                  SlotName: crust
+                - Priority: 3
+                  SlotName: vegType
+                - Priority: 4
+                  SlotName: nonVegType
+              Slots:
+                - Name: "crust"
+                  SlotTypeName: "CrustType"
+                  ValueElicitationSetting:
+                    SlotConstraint: "Required"
+                    PromptSpecification:
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: "Please select a crust:"
+                      MaxRetries: 2
+                      AllowInterrupt: false
+                - Name: "type"
+                  SlotTypeName: "PizzaType"
+                  ValueElicitationSetting:
+                    SlotConstraint: "Required"
+                    PromptSpecification:
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: "Please select a pizza type:"
+                      MaxRetries: 2
+                      AllowInterrupt: false
+                - Name: "vegType"
+                  SlotTypeName: "VegPizzaType"
+                  ValueElicitationSetting:
+                    SlotConstraint: "Required"
+                    PromptSpecification:
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: "Please enter a veg pizza type:"
+                      MaxRetries: 2
+                      AllowInterrupt: false
+                - Name: "nonVegType"
+                  SlotTypeName: "NonVegPizzaType"
+                  ValueElicitationSetting:
+                    SlotConstraint: "Required"
+                    PromptSpecification:
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: "Please enter a non-veg pizza type:"
+                      MaxRetries: 2
+                      AllowInterrupt: false
+            - Name: "OrderExtras"
+              Description: "This intent allows you to order your sides."
+              DialogCodeHook:
+                Enabled: true
+              SampleUtterances:
+                - Utterance: "order sides"
+                - Utterance: "order extras"
+                - Utterance: "sides"
+              SlotPriorities:
+                - Priority: 1
+                  SlotName: bread
+                - Priority: 2
+                  SlotName: pasta
+                - Priority: 3
+                  SlotName: dessert
+              Slots:
+                - Name: "bread"
+                  SlotTypeName: "BreadType"
+                  ValueElicitationSetting:
+                    SlotConstraint: "Required"
+                    PromptSpecification:
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: "Please choose your bread:"
+                      MaxRetries: 2
+                      AllowInterrupt: false
+                - Name: "pasta"
+                  SlotTypeName: "PastaType"
+                  ValueElicitationSetting:
+                    SlotConstraint: "Required"
+                    PromptSpecification:
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: "Please choose your pasta:"
+                      MaxRetries: 2
+                      AllowInterrupt: false
+                - Name: "dessert"
+                  SlotTypeName: "DessertType"
+                  ValueElicitationSetting:
+                    SlotConstraint: "Required"
+                    PromptSpecification:
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: "Please choose your dessert:"
+                      MaxRetries: 2
+                      AllowInterrupt: false
+            - Name: "FallbackIntent"
+              Description: "Default intent when no other intent matches"
+              ParentIntentSignature: "AMAZON.FallbackIntent"
+      TestBotAliasSettings:
+        BotAliasLocaleSettings:
+          - LocaleId: en_US
+            BotAliasLocaleSetting:
+              Enabled: true
+              CodeHookSpecification: 
+                LambdaCodeHook:
+                  CodeHookInterfaceVersion: "1.0"
+                  LambdaArn: !GetAtt OrderPizzaLambdaFunction.Arn   
+
+  # 5. Resource Based policy for Lambda function
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt OrderPizzaLambdaFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: lexv2.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn:  !Sub 
+        - 'arn:aws:lex:${AWS::Region}:${AWS::AccountId}:bot-alias/${BotArn}/TSTALIASID'
+        - BotArn: !GetAtt OrderPizzaTemplateBot.Id
