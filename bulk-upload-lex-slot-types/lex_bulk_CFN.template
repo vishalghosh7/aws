@@ -1,0 +1,197 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters" : {
+        "BucketName": {
+            "Description": "Please enter a new and unique S3 bucket name",
+            "Type": "String",
+            "ConstraintDescription": "must be a valid bucket name"
+        },
+        "CSVFileName": {
+            "Description": "Name of the S3 file (including suffix)",
+            "Type": "String",
+            "ConstraintDescription": "valid S3 file name"
+        },
+        "LexBotId": {
+            "Description": "Mention the bot id",
+            "Type": "String",
+            "ConstraintDescription": "bot id must be valid and exist in the same region"
+        },
+        "LexBotLocaleId": {
+            "Description": "Mention the bot locale id (default: en_US)",
+            "Type": "String",
+            "Default": "en_US",
+            "ConstraintDescription": "must be a supported locale id."
+        },
+        "LexSlotTypeId": {
+            "Description": "Mention the associated slot-type id",
+            "Type": "String",
+            "ConstraintDescription": "slot-type id must valid and available"
+        },
+        "LexSlotTypeName": {
+            "Description": "Mention the associated slot-type name",
+            "Type": "String",
+            "ConstraintDescription": "slot-type name must valid and available"
+        },
+        "LexSlotValueResolution": {
+            "Description": "Mention the slot-value resolution (default: Expand-values)",
+            "Type": "String",
+            "ConstraintDescription": "slot-type resolution must be valid",
+            "AllowedValues": ["Expand-Values", "Restrict-To-Slot-Values"]
+        }
+    },
+    "Resources": {
+        "LambdaRole" : {
+          "Type" : "AWS::IAM::Role",
+          "Properties" : {
+            "AssumeRolePolicyDocument": {
+              "Version" : "2012-10-17",
+              "Statement" : [
+                {
+                  "Effect" : "Allow",
+                  "Principal" : {
+                    "Service" : ["lambda.amazonaws.com","s3.amazonaws.com"]
+                  },
+                  "Action" : [
+                    "sts:AssumeRole"
+                  ]
+                }
+              ]
+            },
+            "Path" : "/",
+            "ManagedPolicyArns":["arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole","arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"],
+            "Policies": [{
+                        "PolicyName": "LexSlotTypeReadUpdatePolicy",
+                        "PolicyDocument": {
+                                 "Version": "2012-10-17",
+                                 "Statement": [{
+                                    "Effect": "Allow",
+                                         "Resource": "*",
+                                           "Action": [
+                                                "lex:UpdateBot",
+                                                "lex:DescribeSlotType",
+                                                "lex:UpdateSlotType",
+                                                "lex:DescribeBot"
+                                           ]
+                                }]
+                        }
+                }]
+          }
+       },
+        "LexSlotTypeLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": {
+                        "Fn::Join": [
+                            "\n",
+                            [
+                                "import boto3",
+                                "import json",
+                                "import csv",
+                                "import codecs",
+                                "import os",
+                                "",
+                                "lex = boto3.client('lexv2-models')",
+                                "s3 = boto3.client('s3')",
+                                "",
+                                "bucket = os.environ['bucket']",
+                                "key = os.environ['key']",
+                                "",
+                                "def lambda_handler(event, context):",
+                                "",
+                                "   try:",
+                                "       obj = s3.get_object(Bucket=bucket, Key=key)",
+                                "   except Exception as error:",
+                                "       print(error)",
+                                "       print(\"S3 Object could not be opened. Check environment variable. \")",
+                                "   try:",
+                                "       data = obj['Body'].read().decode('utf-8').splitlines()",
+                                "       records = csv.reader(data)",
+                                "   except Exception as error:",
+                                "       print(error)",
+                                "       print(\"Error in reading data from CSV file.\")",
+                                "",
+                                "   list_of_slot_type_values = []",
+                                "",
+                                "   #reading from CSV file and adding all values in a list",
+                                "   for eachRecord in records:",
+                                "       sampleValue = {'value': eachRecord[0]}",
+                                "       synonyms = [{'value':value} for value in eachRecord[1:]]",
+                                "",
+                                "       slot_type_value = {'sampleValue': sampleValue}",
+                                "",
+                                "       if(len(synonyms)>0):",
+                                "           slot_type_value['synonyms'] = synonyms",
+                                "",
+                                "       list_of_slot_type_values.append(slot_type_value)",
+                                "",
+                                "   #writing data in respective slot-type",
+                                "   response = lex.update_slot_type(",
+                                "       slotTypeId = os.environ['slotTypeId'],",
+                                "       slotTypeName = os.environ['slotTypeName'],",
+                                "       description = 'This function will add slot type values.',",
+                                "       slotTypeValues = list_of_slot_type_values,",
+                                "       valueSelectionSetting = {'resolutionStrategy': 'TopResolution' if os.environ['slotValueResolution']=='Restrict-To-Slot-Values' else 'OriginalValue'},",
+                                "       botId = os.environ['botId'],",
+                                "       botVersion = 'DRAFT',",
+                                "       localeId = os.environ['botLocale'])",
+                                "",
+                                "   return {",
+                                "       'statusCode': 200,",
+                                "       'body': json.dumps('successful')",
+                                "   }"
+                            ]
+                        ]
+                    }
+                },
+                "Runtime": "python3.7",
+                "Timeout": 900,
+                "MemorySize": 3008,
+                "Environment" : {
+                    "Variables" : {"bucket" : { "Ref" : "BucketName" }, "key" : { "Ref" : "CSVFileName" },"botLocale" : { "Ref" : "LexBotLocaleId" }, "slotTypeId": {"Ref": "LexSlotTypeId"}, "slotTypeName": {"Ref": "LexSlotTypeName"}, "slotValueResolution": {"Ref": "LexSlotValueResolution"}, "botId": {"Ref": "LexBotId"}}
+                }
+            }
+        },
+
+        "S3Bucket": {
+            "DependsOn" : ["LexSlotTypeLambdaFunction","BucketPermission"],
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {"Ref" : "BucketName"},
+                "AccessControl": "BucketOwnerFullControl",
+                "NotificationConfiguration":{
+                    "LambdaConfigurations":[
+                        {
+                            "Event":"s3:ObjectCreated:*",
+                            "Function":{
+                                "Fn::GetAtt": [
+                                    "LexSlotTypeLambdaFunction",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "BucketPermission":{
+            "Type": "AWS::Lambda::Permission",
+            "Properties":{
+                "Action": "lambda:InvokeFunction",
+                "FunctionName":{"Ref" : "LexSlotTypeLambdaFunction"},
+                "Principal": "s3.amazonaws.com",
+                "SourceAccount": {"Ref":"AWS::AccountId"}
+            }
+        }
+    },
+    "Outputs" : {
+
+    }
+}
